@@ -139,3 +139,16 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
 }
+
+from datetime import timedelta
+#토큰 만료 시간 늘리는법
+SIMPLE_JWT = {
+    # Access Token 유효시간 (기본: 5분)
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),  # 예: 60분
+
+    # Refresh Token 유효시간 (기본: 1일)
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),  # 예: 7일
+
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
+}
