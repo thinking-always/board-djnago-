@@ -2,9 +2,24 @@ from django.db import models
 from django.contrib.auth.models import User
 
 class Post(models.Model):
+    class Category(models.TextChoices):
+        BASIC = "basic", "워홀 기본 정보"
+        JOB_HOUSING = "jobs_housing", "일자리 & 숙소"
+        GUIDE = "guide", "가이드"
+        TRAVEL = "travel", "워홀 후기 & 여행"
+        QNA = "qna", "q&a"
+        
     title = models.CharField(max_length = 20)
     content = models.TextField()
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    
+    category = models.CharField(
+        max_length= 20,
+        choices= Category.choices,
+        default=Category.BASIC,
+        db_index=True
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     views = models.PositiveIntegerField(default=0)

@@ -19,10 +19,11 @@ class PostSerializer(serializers.ModelSerializer):
     author = serializers.CharField(source='user.username', read_only=True)                
     date = serializers.DateTimeField(source='created_at', format='%Y-%m-%d', read_only=True)  
     comments = CommentSerializer(many=True, read_only=True)
+    category_label = serializers.CharField(source='get_category_display', read_only=True)
     
     class Meta:
         model = Post
-        fields = ["id", "user", "title", "content", "created_at", "updated_at", "comments", "author", "date", "views"]
+        fields = ["id", "user", "title", "content", "created_at", "updated_at", "comments", "author", "date", "views", "category", "category_label"]
         read_only_fields = ["user", "created_at", "updated_at"]
 
     def create(self, validated_data):
