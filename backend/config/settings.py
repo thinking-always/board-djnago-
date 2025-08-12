@@ -45,11 +45,14 @@ INSTALLED_APPS = [
     'board',
     'rest_framework',
     'corsheaders',
+    'accounts',
 ]
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  
     'django.middleware.common.CommonMiddleware',
+    
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # 정적 서빙
     
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -181,3 +184,25 @@ else:
         api_secret=os.getenv("CLOUDINARY_API_SECRET"),
         secure=True,
     )
+    
+# settings.py
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+DEFAULT_FROM_EMAIL = "no-reply@creeps.local"
+FRONTEND_BASE_URL = "http://localhost:3000"
+
+DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-me")
+ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+
+FRONTEND_ORIGINS = [o for o in os.getenv("FRONTEND_ORIGINS", "").split(",") if o]
+BACKEND_ORIGIN = os.getenv("BACKEND_ORIGIN", "")
+
+CORS_ALLOWED_ORIGINS = FRONTEND_ORIGINS
+CSRF_TRUSTED_ORIGINS = [*FRONTEND_ORIGINS, *([BACKEND_ORIGIN] if BACKEND_ORIGIN else [])]
+
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
