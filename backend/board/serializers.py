@@ -1,4 +1,3 @@
-# board/serializers.py (예시)
 from rest_framework import serializers
 from .models import Post, Comment
 
@@ -8,7 +7,7 @@ class CommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Comment
         fields = ["id", "author", "content", "created_at", "updated_at", "post", "author_username"]
-        read_only_fields = ["author", "created_at", "updated_at"]
+        read_only_fields = ["id", "author", "created_at", "updated_at"]
 
     def get_author_username(self, obj):
         try:
@@ -18,17 +17,23 @@ class CommentSerializer(serializers.ModelSerializer):
         except Exception:
             return "익명"
 
-    def create(self, validated_data):
-        validated_data["author"] = self.context["request"].user
-        return super().create(validated_data)
+    # 🔹 author는 ViewSet.perform_create에서 넣으므로 여기선 create 오버라이드 안 함
+
 
 class PostSerializer(serializers.ModelSerializer):
     author_display = serializers.SerializerMethodField(read_only=True)
+    # 🔹 역참조 comments는 생성 시 입력받지 않도록 읽기전용으로 고정
+    comments = CommentSerializer(many=True, read_only=True)
 
     class Meta:
         model = Post
-        fields = ["id", "user", "title", "content", "created_at", "updated_at", "comments", "author_display", "views", "category"]
-        read_only_fields = ["user", "created_at", "updated_at"]
+        fields = [
+            "id", "user", "title", "content",
+            "created_at", "updated_at",
+            "comments", "author_display",
+            "views", "category",
+        ]
+        read_only_fields = ["id", "user", "created_at", "updated_at", "comments", "views"]
 
     def get_author_display(self, obj):
         try:
@@ -38,6 +43,4 @@ class PostSerializer(serializers.ModelSerializer):
         except Exception:
             return "익명"
 
-    def create(self, validated_data):
-        validated_data["user"] = self.context["request"].user
-        return super().create(validated_data)
+    # 🔹 user는 ViewSet.perform_create에서 넣으므로 여기선 create 오버라이드 안 함
