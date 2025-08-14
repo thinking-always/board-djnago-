@@ -9,7 +9,7 @@ class Post(models.Model):
         TRAVEL = "travel", "워홀 후기 & 여행"
         QNA = "qna", "q&a"
         
-    title = models.CharField(max_length = 20)
+    title = models.CharField(max_length = 50)
     content = models.TextField()
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     
