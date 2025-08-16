@@ -22,7 +22,7 @@ class Post(models.Model):
     )
 
     # ✅ 운영자만 설정 가능한 상단고정(공지)
-    is_pinned = models.BooleanField(default=False, db_index=True)
+    is_pinned = models.BooleanField("공지(상단 고정)", default=False, db_index=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
