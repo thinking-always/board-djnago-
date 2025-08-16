@@ -28,6 +28,8 @@ class PostSerializer(serializers.ModelSerializer):
 
     # 역참조 댓글은 읽기전용
     comments = CommentSerializer(many=True, read_only=True)
+    
+    is_pinned = serializers.BooleanField(required=False, default=False)
 
     class Meta:
         model = Post
@@ -48,6 +50,7 @@ class PostSerializer(serializers.ModelSerializer):
             # 보조 필드
             "author_display",
             "comments",
+            "is_pinned",
         ]
         read_only_fields = [
             "id", "user", "created_at", "updated_at", "views", "comments",

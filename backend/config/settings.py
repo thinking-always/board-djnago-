@@ -7,33 +7,43 @@ from datetime import timedelta
 from dotenv import load_dotenv
 import dj_database_url
 import cloudinary
+from corsheaders.defaults import default_headers, default_methods
 
 # === 기본 경로 / .env ===
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-def split_env(name: str, default: str = ""):
+def split_env(name: str, default: str = "") -> list[str]:
+    """쉼표로 구분된 ENV를 리스트로 파싱"""
     return [x.strip() for x in os.getenv(name, default).split(",") if x.strip()]
 
 # === 보안 / 호스트 ===
-DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-me")
-ALLOWED_HOSTS = split_env("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
+# 로컬 디폴트는 True로 (개발 편의), 배포에선 ENV로 False 주입
+DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret")
+ALLOWED_HOSTS = split_env("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost")
 
 # === CORS / CSRF ===
+# 프론트 기원(로컬 기본 포함)
 FRONTEND_ORIGINS = split_env(
     "FRONTEND_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000" if DEBUG else "",
+    "http://localhost:3000,http://127.0.0.1:3000",
 )
-BACKEND_ORIGIN = os.getenv(
-    "BACKEND_ORIGIN", "http://localhost:8000" if DEBUG else ""
-).strip()
+
+# 백엔드 기원(로컬 기본 포함) — CSRF 신뢰 출처에 넣어줌
+BACKEND_ORIGINS = split_env(
+    "BACKEND_ORIGINS",
+    "http://127.0.0.1:8000,http://localhost:8000",
+)
+# (하위호환) 단일 키 쓰던 프로젝트 대응
+_legacy = os.getenv("BACKEND_ORIGIN", "").strip()
+if _legacy and _legacy not in BACKEND_ORIGINS:
+    BACKEND_ORIGINS.append(_legacy)
 
 CORS_ALLOWED_ORIGINS = FRONTEND_ORIGINS
-CSRF_TRUSTED_ORIGINS = [
-    *FRONTEND_ORIGINS, *([BACKEND_ORIGIN] if BACKEND_ORIGIN else [])
-]
+CSRF_TRUSTED_ORIGINS = [*FRONTEND_ORIGINS, *BACKEND_ORIGINS]
 
+# 프록시/HTTPS 환경에서 원래 스킴 복구
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # === 앱 등록 ===
@@ -55,11 +65,14 @@ INSTALLED_APPS = [
 # === 미들웨어 ===
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-] + (
-    [] if DEBUG else ["whitenoise.middleware.WhiteNoiseMiddleware"]  # 로컬 제외, 배포에서만 사용
-) + [
-    "corsheaders.middleware.CorsMiddleware",     # CORS는 위쪽에 위치
+
+    # ✅ 배포에서만 WhiteNoise 사용 (로컬에선 runserver가 정적 제공)
+    *([] if DEBUG else ["whitenoise.middleware.WhiteNoiseMiddleware"]),
+
+    # ✅ CORS는 CommonMiddleware 보다 위에
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
+
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -92,17 +105,17 @@ DATABASES = {
     "default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}
 }
 
-# 배포: DATABASE_URL 있으면 Postgres로 전환
+# 배포·외부 DB: DATABASE_URL 있으면 전환
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 if DATABASE_URL:
-    # 일부 제공자는 postgres:// 를 제공 → psycopg가 요구하는 postgresql://로 치환
     if DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
+    # 외부 DB SSL 필요 여부: 배포 True / 로컬 False 기본, ENV로 덮기 가능
+    DB_SSL_REQUIRE = os.getenv("DB_SSL_REQUIRE", "true" if not DEBUG else "false").lower() == "true"
     DATABASES["default"] = dj_database_url.parse(
         DATABASE_URL,
-        conn_max_age=600,   # 커넥션 재사용
-        ssl_require=True    # SSL 이슈 시 False로 조정 (제공자 문서 확인)
+        conn_max_age=600,
+        ssl_require=DB_SSL_REQUIRE,
     )
 
 # === 비밀번호 정책 ===
@@ -124,10 +137,10 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 if DEBUG:
-    # 로컬 개발: 기본 스토리지
+    # 로컬: Django 기본 스토리지(collectstatic 불필요)
     STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
 else:
-    # 배포: Whitenoise로 압축/해시된 정적 파일 서빙
+    # 배포: WhiteNoise로 압축/해시
     STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
@@ -140,6 +153,7 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+    # 전역 권한은 ViewSet에서 개별 지정했으니 생략(필요시 추가)
 }
 
 SIMPLE_JWT = {
@@ -155,7 +169,6 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@creeps.local")
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
 
 # === Cloudinary ===
-# CLOUDINARY_URL 하나로 주면 그걸 우선 사용, 아니면 개별 키로 구성
 if os.getenv("CLOUDINARY_URL"):
     cloudinary.config(cloudinary_url=os.getenv("CLOUDINARY_URL"), secure=True)
 else:
@@ -166,8 +179,19 @@ else:
         secure=True,
     )
 
+# === CORS 상세 (로컬 디버깅 완충) ===
+# Authorization 헤더 허용
+CORS_ALLOW_HEADERS = list(default_headers) + ["authorization"]
+CORS_ALLOW_METHODS = list(default_methods)
+
+# 로컬 디버깅 중엔 모두 허용(문제 해결 후 해제해도 됨)
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+
 # === 배포 보안 옵션(HTTPS) ===
 if not DEBUG:
+    SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SECURE_SSL_REDIRECT = True  # 플랫폼이 HTTPS라면 권장
+else:
+    # 로컬에서 켜져 있으면 CORS가 막히므로 명시적으로 꺼둠
+    SECURE_SSL_REDIRECT = False

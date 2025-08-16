@@ -73,7 +73,7 @@ def _extract_public_ids_from_html(html: str):
 
 
 class PostViewSet(viewsets.ModelViewSet):
-    queryset = Post.objects.all().order_by("-created_at")
+    queryset = Post.objects.all().order_by("-is_pinned","-created_at")
     serializer_class = PostSerializer
     permission_classes = [IsAuthorOrReadOnly, permissions.IsAuthenticatedOrReadOnly]
 
@@ -82,7 +82,7 @@ class PostViewSet(viewsets.ModelViewSet):
         cat = self.request.query_params.get("category")
         if cat in dict(Post.Category.choices):
             qs = qs.filter(category=cat)
-        return qs
+        return qs.order_by("-is_pinned", "-created_at")
 
     def perform_create(self, serializer):
         cat = self.request.data.get("category") or Post.Category.BASIC
