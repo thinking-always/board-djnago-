@@ -1,4 +1,3 @@
-# accounts/urls.py
 from django.urls import path
 from .views import (
     RegisterView,
@@ -8,14 +7,17 @@ from .views import (
     PasswordResetIssueByUsernameEmail,
     DeleteAccountView,
 )
+from accounts.social_views import GoogleLogin
 
-# 루트에서 이미 "api/auth/" 프리픽스를 붙여서 include 했음.
-# 따라서 여기서는 하위 경로만 선언한다.
 urlpatterns = [
-    path("register/", RegisterView.as_view(), name="register"),  # /api/auth/register/
+    path("register/", RegisterView.as_view(), name="register"),
     path("username-lookup/", UsernameLookupView.as_view(), name="username_lookup"),
     path("password-reset/", PasswordResetRequestView.as_view(), name="password_reset_request"),
     path("password-reset-confirm/", PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
     path("password-reset/issue/", PasswordResetIssueByUsernameEmail.as_view(), name="password_reset_issue"),
     path("delete-account/", DeleteAccountView.as_view(), name="delete_account"),
+
+    # ✅ 구글 소셜 로그인
+    # 최종 경로: /api/auth/social/google/
+    path("social/google/", GoogleLogin.as_view(), name="google_login"),
 ]
