@@ -8,6 +8,7 @@ from .views import (
     DeleteAccountView,
 )
 from accounts.social_views import GoogleLogin
+from .views import ChangeUsernameView
 
 urlpatterns = [
     path("register/", RegisterView.as_view(), name="register"),
@@ -20,4 +21,5 @@ urlpatterns = [
     # ✅ 구글 소셜 로그인
     # 최종 경로: /api/auth/social/google/
     path("social/google/", GoogleLogin.as_view(), name="google_login"),
+    path("change-username/", ChangeUsernameView.as_view(), name="change_username"),
 ]

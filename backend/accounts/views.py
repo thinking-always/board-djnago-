@@ -1,4 +1,7 @@
 # accounts/views.py
+import re
+import unicodedata
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
@@ -13,6 +16,7 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
 
 # 선택 모델(없으면 주석처리 가능)
 try:
@@ -22,6 +26,12 @@ except Exception:
 
 User = get_user_model()
 
+# ✅ 한글(가-힣) 포함 허용, 길이 3~20
+USERNAME_RE = re.compile(r"^[a-zA-Z0-9가-힣._-]{3,20}$")
+
+def _norm_username(s: str) -> str:
+    """유니코드 NFC 정규화 + 공백 제거"""
+    return unicodedata.normalize("NFC", (s or "").strip())
 
 def get_client_ip(request):
     xff = request.META.get("HTTP_X_FORWARDED_FOR")
@@ -49,7 +59,8 @@ class RegisterView(APIView):
         data = request.data
 
         # 키 유연 처리(프론트가 password/passwordConfirm를 보내도 수용)
-        username = (data.get("username") or "").strip()
+        raw_username = data.get("username") or ""
+        username = _norm_username(raw_username)
         email = (data.get("email") or "").strip()
         p1 = data.get("password1") or data.get("password") or ""
         p2 = data.get("password2") or data.get("passwordConfirm") or data.get("password_confirmation") or ""
@@ -62,6 +73,8 @@ class RegisterView(APIView):
 
         if not username:
             errors.setdefault("username", []).append("아이디는 필수입니다.")
+        elif not USERNAME_RE.fullmatch(username):
+            errors.setdefault("username", []).append("3~20자, 영문/숫자/한글/._- 만 가능합니다.")
         if not p1:
             errors.setdefault("password1", []).append("비밀번호는 필수입니다.")
         if not p2:
@@ -104,18 +117,43 @@ class RegisterView(APIView):
 
 
 # -----------------------
-# 아이디 찾기
+# 아이디 찾기 / 아이디 가용성
 # -----------------------
 class UsernameLookupView(APIView):
     """
-    body: { email, password }
-    resp: 200 {"usernames": [...]} 또는 {"detail": "...못 찾음"}
+    1) 아이디 가용성 확인
+       - GET  /auth/username-lookup/?username=<name>
+       - POST /auth/username-lookup/ { "username": "<name>" }
+       resp: 200 { "exists": bool, "available": bool }
+
+    2) 아이디 찾기(이메일+비밀번호)
+       - POST /auth/username-lookup/ { "email": "...", "password": "..." }
+       resp: 200 { "usernames": [...] } 또는 { "detail": "...못 찾음" }
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [AnonRateThrottle]
+
+    def get(self, request):
+        username = _norm_username(request.query_params.get("username") or "")
+        if not username:
+            return Response({"detail": "username 파라미터가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+
+        exists = User.objects.filter(username__iexact=username).exists()
+        return Response({"exists": bool(exists), "available": not exists}, status=status.HTTP_200_OK)
 
     def post(self, request):
-        email = (request.data.get("email") or "").strip()
-        password = request.data.get("password") or ""
+        data = request.data or {}
+
+        # (A) username 가용성 확인 (POST로도 허용)
+        raw_username = data.get("username") or ""
+        username = _norm_username(raw_username)
+        if username:
+            exists = User.objects.filter(username__iexact=username).exists()
+            return Response({"exists": bool(exists), "available": not exists}, status=status.HTTP_200_OK)
+
+        # (B) 이메일 + 비밀번호로 아이디 찾기
+        email = (data.get("email") or "").strip()
+        password = data.get("password") or ""
         if not email or not password:
             return Response({"detail": "이메일과 비밀번호를 입력하세요."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -165,7 +203,6 @@ class PasswordResetRequestView(APIView):
                     f"아래 링크에서 비밀번호를 재설정하세요:\n{reset_url}\n\n"
                     f"본 메일은 요청하신 경우에만 발송됩니다. 요청하지 않았다면 무시하세요."
                 )
-                # 개발 단계에서 에러 파악 시 fail_silently=False 권장
                 EmailMessage(subject, body, from_email=from_email, to=[email]).send(fail_silently=True)
 
         return Response(ok_msg, status=status.HTTP_200_OK)
@@ -226,7 +263,7 @@ class PasswordResetIssueByUsernameEmail(APIView):
     throttle_classes = [AnonRateThrottle]
 
     def post(self, request):
-        username = (request.data.get("username") or "").strip()
+        username = _norm_username(request.data.get("username") or "")
         email = (request.data.get("email") or "").strip()
 
         if not username or not email:
@@ -271,3 +308,49 @@ class DeleteAccountView(APIView):
         user.save()
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# -----------------------
+# 아이디(유저네임) 변경
+# -----------------------
+class ChangeUsernameView(APIView):
+    """
+    JWT 인증 필요.
+    - 소셜 계정: 비밀번호 없이 변경 가능
+    - 로컬 계정: 비밀번호 확인 후 변경 (user.has_usable_password() == True 이면 password 필수)
+    입력: { "new_username": "...", "password": "..."(옵션) }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        new_username = _norm_username(request.data.get("new_username") or "")
+        password = request.data.get("password", "")
+
+        # 1) 입력 검증
+        if not new_username:
+            return Response({"new_username": ["아이디를 입력해 주세요."]}, status=status.HTTP_400_BAD_REQUEST)
+        if not USERNAME_RE.fullmatch(new_username):
+            return Response({"new_username": ["3~20자, 영문/숫자/한글/._- 만 가능합니다."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 2) 동일 아이디 변경 방지 (정규화 후 비교)
+        if new_username.lower() == (unicodedata.normalize("NFC", user.username or "").lower()):
+            return Response({"detail": "현재 아이디와 동일합니다."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 3) 중복 체크(대소문자 무시, 정규화된 값으로)
+        exists = User.objects.filter(username__iexact=new_username).exclude(pk=user.pk).exists()
+        if exists:
+            return Response({"new_username": ["이미 사용 중인 아이디입니다."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 4) 로컬 계정은 비밀번호 확인, 소셜 계정은 생략 가능
+        if user.has_usable_password():
+            if not password:
+                return Response({"password": ["현재 비밀번호를 입력해 주세요."]}, status=status.HTTP_400_BAD_REQUEST)
+            if not user.check_password(password):
+                return Response({"password": ["비밀번호가 올바르지 않습니다."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 5) 변경
+        user.username = new_username
+        user.save(update_fields=["username"])
+
+        return Response({"username": user.username}, status=status.HTTP_200_OK)

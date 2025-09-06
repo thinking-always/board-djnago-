@@ -54,8 +54,19 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    
+    'django.contrib.sites',
+    
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',
+    'allauth.socialaccount.providers.kakao',
+    'allauth.socialaccount.providers.naver',
 
     "rest_framework",
+    'dj_rest_auth',
+    'dj_rest_auth.registration',
     "corsheaders",
 
     "board",
@@ -75,7 +86,11 @@ MIDDLEWARE = [
 
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    
+    "allauth.account.middleware.AccountMiddleware", # 추가(소셜 계정)
+    
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -161,6 +176,7 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": False,
     "BLACKLIST_AFTER_ROTATION": False,
+    "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
 # === 이메일 ===
@@ -188,10 +204,49 @@ CORS_ALLOW_METHODS = list(default_methods)
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 
 # === 배포 보안 옵션(HTTPS) ===
-if not DEBUG:
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-else:
-    # 로컬에서 켜져 있으면 CORS가 막히므로 명시적으로 꺼둠
+# if not DEBUG:
+#     SECURE_SSL_REDIRECT = True --------------------------------------------배포시
+#     SESSION_COOKIE_SECURE = True
+#     CSRF_COOKIE_SECURE = True
+# else:
+#     # 로컬에서 켜져 있으면 CORS가 막히므로 명시적으로 꺼둠
+#     SECURE_SSL_REDIRECT = False
+
+if DEBUG:
     SECURE_SSL_REDIRECT = False
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    SECURE_HSTS_SECONDS = 0
+
+# SITE_ID = 2
+SITE_ID = 1
+# ------------------------------------------------------------#siteid
+
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',                  # 기본
+    'allauth.account.auth_backends.AuthenticationBackend',        # allauth
+]
+
+
+ACCOUNT_EMAIL_VERIFICATION = "none"
+ACCOUNT_AUTHENTICATION_METHOD = "username"   # 필요시 "email"로 변경
+ACCOUNT_EMAIL_REQUIRED = False
+
+# dj-rest-auth를 JWT 모드로 전환 + 토큰 모델 비활성화
+REST_USE_JWT = True
+REST_AUTH = {
+    "TOKEN_MODEL": None,
+}
+
+# allauth 최신 키
+ACCOUNT_LOGIN_METHODS = {"username", "email"}  # 둘 다 허용. 한 쪽만이면 {"username"} 또는 {"email"}
+
+REST_USE_JWT = True
+REST_AUTH = {
+    "TOKEN_MODEL": None,  # authtoken 비활성화
+}
+# 소셜 로그인 성공 후 이동할 URL (서버 세션 기준)
+LOGIN_REDIRECT_URL = "/social/complete/"
+SOCIALACCOUNT_LOGIN_ON_GET = True
+
+CORS_ALLOW_CREDENTIALS=True
