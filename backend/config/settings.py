@@ -218,8 +218,9 @@ if DEBUG:
     CSRF_COOKIE_SECURE = False
     SECURE_HSTS_SECONDS = 0
 
-# SITE_ID = 2
-SITE_ID = 1
+SITE_ID = int(os.getenv("SITE_ID", "1"))
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https"
+
 # ------------------------------------------------------------#siteid
 
 AUTHENTICATION_BACKENDS = [
@@ -250,3 +251,5 @@ LOGIN_REDIRECT_URL = "/social/complete/"
 SOCIALACCOUNT_LOGIN_ON_GET = True
 
 CORS_ALLOW_CREDENTIALS=True
+
+
