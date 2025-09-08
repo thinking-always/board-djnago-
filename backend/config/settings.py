@@ -252,4 +252,28 @@ SOCIALACCOUNT_LOGIN_ON_GET = True
 
 CORS_ALLOW_CREDENTIALS=True
 
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https" 
 
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "APP": {
+            "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
+            "secret": os.getenv("GOOGLE_SECRET", ""),
+            "key": "",
+        }
+    },
+    "naver": {
+        "APP": {
+            "client_id": os.getenv("NAVER_CLIENT_ID", ""),
+            "secret": os.getenv("NAVER_SECRET", ""),
+            "key": "",
+        }
+    },
+    "kakao": {
+        "APP": {
+            "client_id": os.getenv("KAKAO_CLIENT_ID", ""),
+            "secret": os.getenv("KAKAO_SECRET", ""),  # 카카오는 시크릿이 없을 수도 있음
+            "key": "",
+        }
+    },
+}
