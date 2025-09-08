@@ -277,3 +277,15 @@ SOCIALACCOUNT_PROVIDERS = {
         }
     },
 }
+
+
+# 추가 정보 수집 안 함 (새 allauth에서는 ACCOUNT_SIGNUP_FIELDS 사용)
+ACCOUNT_SIGNUP_FIELDS = []          # 추가 입력 필드 없음
+SOCIALACCOUNT_AUTO_SIGNUP = True    # 가능하면 자동 가입
+
+# 이메일/유저네임 요구 완화(이메일은 이미 False)
+ACCOUNT_EMAIL_REQUIRED = False
+# 기본 User 모델은 username 필수라, 자동 생성 못하면 어차피 막힙니다 → 아래 어댑터로 해결
+
+ACCOUNT_ADAPTER = "accounts.adapter.MyAccountAdapter"
+SOCIALACCOUNT_ADAPTER = "accounts.adapter.MySocialAdapter"
